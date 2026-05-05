@@ -1,0 +1,63 @@
+import { MaterialIcons } from "@expo/vector-icons";
+import React from "react";
+import { StyleSheet, TextInput, View } from "react-native";
+import colors from "../../constants/colors";
+import fonts from "../../constants/fonts";
+
+type Props = {
+  value: string;
+  onChangeText: (text: string) => void;
+  placeholder: string;
+  secureTextEntry?: boolean;
+  icon?: React.ComponentProps<typeof MaterialIcons>["name"];
+};
+
+export default function CustomInput({
+  value,
+  onChangeText,
+  placeholder,
+  secureTextEntry = false,
+  icon,
+}: Props) {
+  return (
+    <View style={styles.container}>
+      {icon ? (
+        <MaterialIcons name={icon} size={20} color={colors.white} style={styles.icon} />
+      ) : null}
+
+      <TextInput
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor="rgba(255,255,255,0.75)"
+        secureTextEntry={secureTextEntry}
+        style={styles.input}
+      />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    width: "100%",
+    height: 55,
+    backgroundColor: "rgba(199, 221, 255, 0.4)",
+    borderRadius: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    marginBottom: 12,
+  },
+  icon: {
+    marginRight: 12,
+  },
+  input: {
+    flex: 1,
+    color: colors.white,
+    fontSize: 15,
+    fontWeight: "500",
+    fontFamily: fonts.interRegular,
+    letterSpacing: 1,
+    paddingVertical: 0,
+  },
+});
