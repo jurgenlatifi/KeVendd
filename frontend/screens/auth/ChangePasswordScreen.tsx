@@ -15,8 +15,10 @@ import AuthHeader from "@/components/auth/AuthHeader";
 import AuthLayout from "@/components/auth/AuthLayout";
 import PasswordInput from "@/components/auth/PasswordInput";
 import colors from "@/constants/colors";
+import BackButton from "@/components/common/BackButton";
 
 export default function ChangePasswordScreen() {
+
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
 
@@ -43,9 +45,12 @@ export default function ChangePasswordScreen() {
   };
 
   return (
+
     <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+
       <View style={{ flex: 1 }}>
         <AuthLayout>
+        <BackButton />
           <AuthHeader title="Ndrysho Fjalëkalimin" subtitle="" />
 
           <View style={styles.formContainer}>

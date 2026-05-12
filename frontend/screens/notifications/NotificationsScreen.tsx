@@ -1,6 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
-import React from "react";
+import { useFocusEffect } from "expo-router";
+import React, { useCallback, useState } from "react";
 import {
+  ActivityIndicator,
   Image,
   SafeAreaView,
   ScrollView,
@@ -10,42 +12,112 @@ import {
 } from "react-native";
 
 import BackButton from "@/components/common/BackButton";
+import api from "@/api";
 
-type NotificationItem = {
-  id: string;
-  date: string;
-  name: string;
-  time: string;
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+type NotificationType =
+  | "CHECK_IN_CONFIRMATION"
+  | "EXPIRY_WARNING"
+  | "EXPIRY_REACHED"
+  | "UNPAID_REMINDER"
+  | "OTP"
+  | "RESERVATION_CONFIRMATION";
+
+type DeliveryStatus = "PENDING" | "DELIVERED" | "FAILED";
+type NotificationChannel = "PUSH" | "SMS";
+
+type Notification = {
+  id: number;
   message: string;
+  type: NotificationType;
+  channel: NotificationChannel;
+  deliveryStatus: DeliveryStatus;
+  sentAt: string | number[] | null;
+  createdAt: string | number[];
 };
 
-const notifications: NotificationItem[] = [
-  {
-    id: "1",
-    date: "31 Mars 2026",
-    name: "Emri Mbiemri",
-    time: "09:30 e paradites",
-    message: "Rezervimi juaj sapo u krye. Nxito për të zënë vendin.",
-  },
-  {
-    id: "2",
-    date: "11 Mars 2026",
-    name: "Emri Mbiemri",
-    time: "10:00 e paradites",
-    message:
-      "Numri personal i parkimit tuaj është #123456, përdoreni për kryer pagesën.",
-  },
-];
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function parseLocalDateTime(raw: string | number[] | null): Date | null {
+  if (!raw) return null;
+  if (Array.isArray(raw)) {
+    const [year, month, day, hour = 0, minute = 0, second = 0] = raw;
+    return new Date(year, month - 1, day, hour, minute, second);
+  }
+  return new Date(raw);
+}
+
+function formatDate(raw: string | number[]): string {
+  const date = parseLocalDateTime(raw);
+  if (!date) return "";
+  return date.toLocaleDateString("sq-AL", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+}
+
+function formatTime(raw: string | number[] | null): string {
+  const date = parseLocalDateTime(raw);
+  if (!date) return "";
+  return date.toLocaleTimeString("sq-AL", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+const TYPE_LABELS: Record<NotificationType, string> = {
+  CHECK_IN_CONFIRMATION:    "Konfirmim Check-In",
+  EXPIRY_WARNING:           "Paralajmërim Skadimi",
+  EXPIRY_REACHED:           "Rezervimi Skadoi",
+  UNPAID_REMINDER:          "Kujtesë Pagese",
+  OTP:                      "Kod OTP",
+  RESERVATION_CONFIRMATION: "Konfirmim Rezervimi",
+};
+
+const STATUS_COLOR: Record<DeliveryStatus, string> = {
+  PENDING:   "#F0A500",
+  DELIVERED: "#6ACA6A",
+  FAILED:    "#ED0000",
+};
+
+// ── Screen ────────────────────────────────────────────────────────────────────
 
 export default function NotificationsScreen() {
-  const groupedNotifications = notifications.reduce<Record<string, NotificationItem[]>>(
-    (groups, item) => {
-      if (!groups[item.date]) {
-        groups[item.date] = [];
-      }
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [loading, setLoading]             = useState(true);
+  const [error, setError]                 = useState<string | null>(null);
 
-      groups[item.date].push(item);
-      return groups;
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+
+      const fetch = async () => {
+        setLoading(true);
+        setError(null);
+        try {
+          const { data } = await api.get<Notification[]>("/notifications/me");
+          if (!cancelled) setNotifications(data);
+        } catch {
+          if (!cancelled) setError("Ndodhi një gabim. Provoni përsëri.");
+        } finally {
+          if (!cancelled) setLoading(false);
+        }
+      };
+
+      fetch();
+      return () => { cancelled = true; };
+    }, [])
+  );
+
+  // Group by formatted date string
+  const grouped = notifications.reduce<Record<string, Notification[]>>(
+    (acc, item) => {
+      const label = formatDate(item.createdAt);
+      if (!acc[label]) acc[label] = [];
+      acc[label].push(item);
+      return acc;
     },
     {}
   );
@@ -62,49 +134,99 @@ export default function NotificationsScreen() {
         />
       </View>
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-      >
-        <Text style={styles.title}>Njoftime</Text>
+      {/* ── Body ── */}
+      {loading ? (
+        <View style={styles.centeredState}>
+          <ActivityIndicator size="large" color="#6ACA6A" />
+        </View>
 
-        {Object.entries(groupedNotifications).map(([date, items]) => (
-          <View key={date} style={styles.group}>
-            <Text style={styles.dateText}>{date}</Text>
+      ) : error ? (
+        <View style={styles.centeredState}>
+          <Ionicons name="cloud-offline-outline" size={60} color="#555" />
+          <Text style={styles.stateText}>{error}</Text>
+        </View>
 
-            <View style={styles.notificationsBox}>
-              {items.map((item, index) => (
-                <View key={item.id}>
-                  <View style={styles.notificationRow}>
-                    <View style={styles.iconCircle}>
-                      <Ionicons
-                        name="notifications-outline"
-                        size={24}
-                        color="#fff"
-                      />
-                    </View>
+      ) : notifications.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <Image
+            source={require("../../assets/notifications.png")}
+            style={styles.emptyImage}
+            resizeMode="contain"
+          />
+          <Text style={styles.emptyText}>
+            Ju nuk keni asnjë njoftim për momentin.
+          </Text>
+        </View>
 
-                    <View style={styles.textContainer}>
-                      <View style={styles.rowHeader}>
-                        <Text style={styles.name}>{item.name}</Text>
-                        <Text style={styles.time}>{item.time}</Text>
+      ) : (
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+        >
+          <Text style={styles.title}>Njoftime</Text>
+
+          {Object.entries(grouped).map(([date, items]) => (
+            <View key={date} style={styles.group}>
+              <Text style={styles.dateText}>{date}</Text>
+
+              <View style={styles.notificationsBox}>
+                {items.map((item, index) => (
+                  <View key={item.id}>
+                    <View style={styles.notificationRow}>
+                      {/* Icon */}
+                      <View style={styles.iconCircle}>
+                        <Ionicons
+                          name="notifications-outline"
+                          size={24}
+                          color="#fff"
+                        />
                       </View>
 
-                      <Text style={styles.message}>{item.message}</Text>
+                      {/* Text */}
+                      <View style={styles.textContainer}>
+                        <View style={styles.rowHeader}>
+                          <Text style={styles.name}>
+                            {TYPE_LABELS[item.type] ?? item.type}
+                          </Text>
+                          <Text style={styles.time}>
+                            {formatTime(item.sentAt ?? item.createdAt)}
+                          </Text>
+                        </View>
+
+                        <Text style={styles.message}>{item.message}</Text>
+
+                        {/* Delivery status dot */}
+                        <View style={styles.statusRow}>
+                          <View
+                            style={[
+                              styles.statusDot,
+                              { backgroundColor: STATUS_COLOR[item.deliveryStatus] },
+                            ]}
+                          />
+                          <Text style={styles.statusText}>
+                            {item.deliveryStatus === "DELIVERED"
+                              ? "Dërguar"
+                              : item.deliveryStatus === "PENDING"
+                              ? "Në pritje"
+                              : "Dështuar"}
+                          </Text>
+                        </View>
+                      </View>
                     </View>
+
+                    {index !== items.length - 1 && <View style={styles.line} />}
                   </View>
-
-                  {index !== items.length - 1 && <View style={styles.line} />}
-                </View>
-              ))}
+                ))}
+              </View>
             </View>
-          </View>
-        ))}
-      </ScrollView>
-
+          ))}
+        </ScrollView>
+      )}
     </SafeAreaView>
   );
 }
+
+// ── Styles ────────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   container: {
@@ -113,18 +235,58 @@ const styles = StyleSheet.create({
   },
 
   header: {
-    height: 120,
+    position: "absolute",
+    top: 55,
+    alignSelf: "center",
     alignItems: "center",
     justifyContent: "center",
   },
 
   logo: {
     width: 145,
-    height: 60,
+    height: 55,
   },
 
   scrollContent: {
+    paddingTop: 140,
     paddingBottom: 120,
+  },
+
+  centeredState: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 16,
+  },
+
+  stateText: {
+    color: "#9D9D9D",
+    fontSize: 14,
+    textAlign: "center",
+    paddingHorizontal: 32,
+  },
+
+  emptyContainer: {
+    position: "absolute",
+    top: "39%",
+    alignSelf: "center",
+    alignItems: "center",
+    width: "100%",
+  },
+
+  emptyImage: {
+    width: 100,
+    height: 100,
+    marginBottom: 35,
+  },
+
+  emptyText: {
+    maxWidth: "90%",
+    fontSize: 14,
+    lineHeight: 27,
+    letterSpacing: -1,
+    color: "#fff",
+    textAlign: "center",
   },
 
   title: {
@@ -196,6 +358,24 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     marginTop: 4,
     paddingRight: 8,
+  },
+
+  statusRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 6,
+    gap: 5,
+  },
+
+  statusDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+  },
+
+  statusText: {
+    color: "#9D9D9D",
+    fontSize: 11,
   },
 
   line: {

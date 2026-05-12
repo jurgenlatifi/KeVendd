@@ -11,6 +11,7 @@ import AuthButton from "@/components/auth/AuthButton";
 import AuthHeader from "@/components/auth/AuthHeader";
 import AuthLayout from "@/components/auth/AuthLayout";
 import CustomInput from "@/components/auth/CustomInput";
+import BackButton from "@/components/common/BackButton";
 
 export default function ForgotPasswordScreen() {
   const [email, setEmail] = useState("");
@@ -24,6 +25,7 @@ export default function ForgotPasswordScreen() {
     <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
       <View style={{ flex: 1 }}>
         <AuthLayout>
+        <BackButton/>
           <AuthHeader title="Ndrysho Fjalëkalimin" />
 
           <View style={styles.formContainer}>

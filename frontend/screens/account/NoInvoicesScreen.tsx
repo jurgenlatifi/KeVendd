@@ -58,44 +58,44 @@ const styles = StyleSheet.create({
   },
 
   logo: {
-    width: 150,
-    height: 70,
+    width: 145,
+    height: 55,
   },
 
   title: {
-    position: "absolute",
-    top: 155,
-    left: 32,
-    fontSize: 29,
-    lineHeight: 37,
-    letterSpacing: -1,
-    color: "#FFFFFF",
-    fontFamily: fonts.interRegular,
-  },
+      position: "absolute",
+      top: 155,
+      left: 32,
+      fontSize: 30,
+      lineHeight: 37,
+      letterSpacing: 0,
+      color: "#FFFFFF",
+      fontFamily: fonts.interRegular,
+    },
 
-  emptyContainer: {
-    position: "absolute",
-    top: "39%",
-    alignSelf: "center",
-    alignItems: "center",
-    width: "100%",
-  },
+    emptyContainer: {
+      position: "absolute",
+      top: "30%",
+      alignSelf: "center",
+      alignItems: "center",
+      width: "100%",
+    },
 
-  emptyImage: {
-    width: 143,
-    height: 126,
-    marginTop: 100,
-    marginBottom: 35,
-  },
+    emptyImage: {
+        width: 145,
+        height: 130,
+        marginTop: 100,
+        marginBottom: 35,
+      },
 
-  emptyText: {
-    width: 396,
-    maxWidth: "90%",
-    fontSize: 14,
-    lineHeight: 27,
-    letterSpacing: -1,
-    color: "#FFFFFF",
-    textAlign: "center",
-    fontFamily: fonts.interRegular,
-  },
+      emptyText: {
+        width: 396,
+        maxWidth: "90%",
+        fontSize: 20,
+        lineHeight: 27,
+        letterSpacing: 0,
+        color: "#FFFFFF",
+        textAlign: "center",
+      fontFamily: fonts.interRegular,
+    },
 });

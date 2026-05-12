@@ -37,8 +37,8 @@ const styles = StyleSheet.create({
   sectionTitle: {
     color: colors.white,
     fontSize: 20,
-    fontFamily: fonts.interSemiBold,
-    marginBottom: 7,
+    fontFamily: fonts.interRegular,
+    marginBottom: 10,
   },
 
   row: {
@@ -54,7 +54,7 @@ const styles = StyleSheet.create({
   label: {
     color: colors.white,
     fontSize: 16,
-    fontFamily: fonts.interSemiBold,
+    fontFamily: fonts.interRegular,
     marginBottom: 7,
   },
 
@@ -133,7 +133,7 @@ const styles = StyleSheet.create({
   lightCard: {
     height: 41,
     borderRadius: 13,
-    backgroundColor: "rgba(255,255,255,0.77)",
+    backgroundColor: "rgba(255, 255, 255, 0.65)",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -156,7 +156,7 @@ const styles = StyleSheet.create({
   paymentText: {
     flex: 1,
     color: colors.white,
-    fontSize: 13,
+    fontSize: 15,
     fontFamily: fonts.interRegular,
   },
 
@@ -169,7 +169,7 @@ const styles = StyleSheet.create({
   invoiceText: {
     color: colors.white,
     fontSize: 20,
-    fontFamily: fonts.interSemiBold,
+    fontFamily: fonts.interRegular,
   },
 
   actionButtonsRow: {

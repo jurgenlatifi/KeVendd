@@ -21,8 +21,7 @@ export default function MapScreen() {
   const [parkingLots, setParkingLots] = useState<ParkingLot[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchText, setSearchText] = useState("");
-  const [selectedProperty, setSelectedProperty] =
-    useState<ParkingLot | null>(null);
+  const [selectedProperty, setSelectedProperty] = useState<ParkingLot | null>(null);
   const [searchPin, setSearchPin] = useState<ParkingLot | null>(null);
   const [showCard, setShowCard] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -106,11 +105,9 @@ export default function MapScreen() {
 
   // ── Helper to build display strings from API data ──
 
-  const formatAvailable = (lot: ParkingLot) =>
-    `${lot.availableSpots} vende`;
+  const formatAvailable = (lot: ParkingLot) => `${lot.availableSpots} vende`;
 
-  const formatPrice = (lot: ParkingLot) =>
-    `${lot.pricePerHour}ALL/Ora`;
+  const formatPrice = (lot: ParkingLot) => `${lot.pricePerHour}ALL/Ora`;
 
   const formatHours = (lot: ParkingLot) => {
     if (!lot.openTime || !lot.closeTime) return "24 orë";
@@ -189,7 +186,7 @@ export default function MapScreen() {
           }
         }}
       >
-        <Ionicons name="notifications" size={24} color="#fff" />
+        <Ionicons name="notifications-outline" size={28} color="#fff" />
         {hasNewNotifications && <View style={styles.redDot} />}
       </Pressable>
 
@@ -230,9 +227,7 @@ export default function MapScreen() {
 
               <View style={styles.suggestionTextWrapper}>
                 <Text style={styles.suggestionTitle}>{lot.name}</Text>
-                <Text style={styles.suggestionAddress}>
-                  {lot.zone ?? ""}
-                </Text>
+                <Text style={styles.suggestionAddress}>{lot.zone ?? ""}</Text>
               </View>
             </Pressable>
           ))}
@@ -304,20 +299,21 @@ const styles = StyleSheet.create({
 
   logoWrapper: {
     position: "absolute",
-    top: 1,
+    top: 55,
     alignSelf: "center",
-    width: 700,
-    height: 185,
     alignItems: "center",
     justifyContent: "center",
   },
 
-  logo: { width: 700, height: 185 },
+  logo: {
+    width: 145,
+    height: 55,
+  },
 
   notificationButton: {
     position: "absolute",
-    top: 62,
-    right: 26,
+    top: 57,
+    right: 50,
     width: 48,
     height: 48,
     borderRadius: 24,
@@ -398,7 +394,13 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
 
-  cardTitle: { color: "#fff" },
+  cardTitle: {
+    color: "#fff",
+    fontSize: 20,
+    marginBottom: 5,
+    marginTop: 10,
+    fontWeight: "500",
+  },
 
   cardInfo: { color: "#949494" },
 
@@ -407,12 +409,21 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
 
-  price: { color: "#fff" },
+  price: {
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "600",
+    marginTop: 20,
+  },
 
   availableBadge: {
     backgroundColor: "#ED0000",
     borderRadius: 20,
+    alignItems: "center",
     padding: 6,
+    width: 77,
+    height: 28,
+    marginTop: 10,
   },
 
   availableText: { color: "#fff" },

@@ -125,7 +125,7 @@ export default function RegisterScreen() {
 
       <View style={styles.buttonContainer}>
         {loading ? (
-          <ActivityIndicator size="large" color="#000" />
+          <ActivityIndicator size="large" color="#fff" />
         ) : (
           <AuthButton title="Regjistrohu" onPress={handleRegister} />
         )}

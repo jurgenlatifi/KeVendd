@@ -89,13 +89,13 @@ export default function ReservationsHistoryScreen() {
           style={styles.bellWrapper}
           onPress={() => {
             if (hasNotifications) {
-              router.push("/notifications");
+              router.push("(screens)/notifications");
             } else {
-              router.push("/no-notifications");
+              router.push("(screens)/notifications");
             }
           }}
         >
-          <Ionicons name="notifications-outline" size={27} color="#fff" />
+          <Ionicons name="notifications-outline" size={28} color="#fff" />
           {hasNotifications && <View style={styles.notificationDot} />}
         </Pressable>
       </View>
@@ -147,7 +147,11 @@ function ReservationCard({ item }: { item: ReservationData }) {
           <View
             style={[
               styles.statusBadge,
-              { backgroundColor: isOpen ? "#6ACA6A" : "#ED0000" },
+              {
+                backgroundColor: isOpen
+                  ? "rgba(106, 202, 106, 0.4)"
+                  : "rgba(255, 116, 116, 0.4)",
+              },
             ]}
           >
             <Text style={styles.badgeText}>{statusLabel(item.status)}</Text>
@@ -188,20 +192,27 @@ const styles = StyleSheet.create({
   },
 
   header: {
-    height: 105,
+    top: 0,
+    height: 70,
     alignItems: "center",
     justifyContent: "center",
   },
 
   logo: {
-    width: 135,
+    width: 145,
     height: 55,
   },
 
   bellWrapper: {
     position: "absolute",
-    right: 28,
-    top: 38,
+    top: 10,
+    right: 50,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "rgba(76,76,76,0.45)",
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   notificationDot: {
@@ -221,10 +232,10 @@ const styles = StyleSheet.create({
 
   title: {
     color: "#fff",
-    fontSize: 22,
-    fontWeight: "500",
+    fontSize: 30,
+    fontWeight: "400",
     marginBottom: 18,
-    marginLeft: 12,
+    marginTop: 40,
   },
 
   emptyText: {
@@ -247,7 +258,7 @@ const styles = StyleSheet.create({
   },
 
   card: {
-    height: 105,
+    height: 130,
     backgroundColor: "#323232",
     borderRadius: 10,
     flexDirection: "row",
@@ -256,8 +267,8 @@ const styles = StyleSheet.create({
   },
 
   imagePlaceholder: {
-    width: 115,
-    height: 89,
+    width: 123,
+    height: 110,
     borderRadius: 8,
     backgroundColor: "#555",
   },
@@ -276,14 +287,15 @@ const styles = StyleSheet.create({
   statusBadge: {
     borderRadius: 20,
     paddingHorizontal: 8,
-    paddingVertical: 2,
+    paddingVertical: 4,
   },
 
   spotsBadge: {
     backgroundColor: "#ED0000",
     borderRadius: 20,
     paddingHorizontal: 8,
-    paddingVertical: 2,
+    paddingVertical: 4,
+    height: 18,
   },
 
   badgeText: {
@@ -294,8 +306,9 @@ const styles = StyleSheet.create({
 
   parkingName: {
     color: "#fff",
-    fontSize: 15,
-    fontWeight: "600",
+    fontSize: 20,
+    fontWeight: "500",
+    marginTop: 5,
   },
 
   address: {
@@ -305,17 +318,18 @@ const styles = StyleSheet.create({
   },
 
   reserveAgainButton: {
-    marginTop: 10,
+    marginTop: 15,
     backgroundColor: "#fff",
     borderRadius: 20,
     alignSelf: "flex-start",
     paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingVertical: 8,
+    height: 30,
   },
 
   reserveAgainText: {
     color: "#000",
-    fontSize: 9,
+    fontSize: 11,
     fontWeight: "600",
   },
 });

@@ -1,11 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
   Dimensions,
   Image,
+  Modal,
   PanResponder,
   Pressable,
   SafeAreaView,
@@ -22,15 +23,15 @@ import {
 } from "@/services/reservationService";
 import { fetchParkingLots, ParkingLot } from "@/services/parkingService";
 
+const TOTAL_SECONDS = 10 * 60;
 
 export default function HomeScreen() {
-
   // Data from backend
-  const [activeReservation, setActiveReservation] =
-    useState<ReservationData | null>(null);
+  const [activeReservation, setActiveReservation] = useState<ReservationData | null>(null);
   const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
   const [partnerParkings, setPartnerParkings] = useState<ParkingLot[]>([]);
   const [loading, setLoading] = useState(true);
+  const [expiredModalVisible, setExpiredModalVisible] = useState(false);
 
   const hasNotifications = false;
 
@@ -43,22 +44,18 @@ export default function HomeScreen() {
         try {
           setLoading(true);
 
-          // Fetch reservation history and pick the active one
           const [history, parkings] = await Promise.all([
             fetchMyHistory().catch(() => [] as ReservationData[]),
-            fetchParkingLots({ availableOnly: true }).catch(
-              () => [] as ParkingLot[]
-            ),
+            fetchParkingLots({ availableOnly: true }).catch(() => [] as ParkingLot[]),
           ]);
 
           if (cancelled) return;
 
-          // Find the most recent CONFIRMED or SOFT_HOLD reservation
           const active = history.find(
             (r) => r.status === "CONFIRMED" || r.status === "SOFT_HOLD"
           );
           setActiveReservation(active ?? null);
-          setPartnerParkings(parkings.slice(0, 4)); // show up to 4 partner cards
+          setPartnerParkings(parkings.slice(0, 4));
         } catch (err) {
           console.warn("Failed to load home data", err);
         } finally {
@@ -72,40 +69,39 @@ export default function HomeScreen() {
     }, [])
   );
 
-  // ── Compute remaining time ──
-  React.useEffect(() => {
+  // ── Compute remaining time from holdExpiresAt ──
+  useEffect(() => {
     let timer: ReturnType<typeof setInterval> | null = null;
-    
+
     if (activeReservation?.holdExpiresAt) {
       const expirationDate = new Date(activeReservation.holdExpiresAt).getTime();
-      
+
       const updateTimer = () => {
         const remaining = Math.max(0, Math.floor((expirationDate - Date.now()) / 1000));
         setSecondsLeft(remaining);
-        
-        // If the timer reaches 0, you could optionally refetch or clear the active reservation
+
         if (remaining <= 0) {
           setActiveReservation(null);
           setSecondsLeft(null);
+          setExpiredModalVisible(true);
           if (timer) clearInterval(timer);
         }
       };
-      
+
       updateTimer();
       timer = setInterval(updateTimer, 1000);
     } else {
       setSecondsLeft(null);
     }
-    
+
     return () => {
       if (timer) clearInterval(timer);
     };
   }, [activeReservation]);
 
-  const timeText = secondsLeft !== null 
-    ? `${Math.floor(secondsLeft / 60)}:${(secondsLeft % 60).toString().padStart(2, "0")}`
-    : "";
-
+  const minutes = secondsLeft !== null ? Math.floor(secondsLeft / 60) : 0;
+  const seconds = secondsLeft !== null ? secondsLeft % 60 : 0;
+  const timeText = `${minutes}:${seconds.toString().padStart(2, "0")}`;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -156,9 +152,6 @@ export default function HomeScreen() {
                   : ""}
               </Text>
 
-
-
-
               <View style={styles.statusBadge}>
                 <Text style={styles.statusText}>
                   {activeReservation.status === "CONFIRMED"
@@ -178,9 +171,7 @@ export default function HomeScreen() {
           <View style={styles.currentCard}>
             <View style={styles.imagePlaceholder} />
             <View style={styles.currentInfo}>
-              <Text style={styles.currentName}>
-                Nuk keni rezervim aktual
-              </Text>
+              <Text style={styles.currentName}>Nuk keni rezervim aktual</Text>
               <Text style={styles.currentAddress}>
                 Shkoni te harta për të gjetur një parkim
               </Text>
@@ -231,6 +222,32 @@ export default function HomeScreen() {
       {activeReservation && secondsLeft !== null && (
         <DraggableCountdown secondsLeft={secondsLeft} timeText={timeText} />
       )}
+
+      <Modal visible={expiredModalVisible} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.expiredModal}>
+            <View style={styles.expiredCircle}>
+              <Ionicons name="time-outline" size={52} color="#FFFFFF" />
+            </View>
+
+            <Text style={styles.expiredTitle}>
+              Koha e rezervimit përfundoi.
+            </Text>
+
+            <Text style={styles.expiredText}>
+              Nëse nuk keni arritur në parkimin e zgjedhur, ju nuk do të keni
+              një vend të rezervuar.
+            </Text>
+
+            <Pressable
+              style={styles.okButton}
+              onPress={() => setExpiredModalVisible(false)}
+            >
+              <Text style={styles.okButtonText}>Në rregull</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -249,20 +266,16 @@ function DraggableCountdown({
   const SCREEN_HEIGHT = Dimensions.get("window").height;
   const SNAP_MARGIN = 12;
 
-  // Top boundary: below the header (~90px from top)
   const MIN_Y = 90;
-  // Bottom boundary: tab bar is 61px tall, sits 17px from bottom → 78px total.
   const MAX_Y = SCREEN_HEIGHT - WIDGET_SIZE - 78 - 10;
 
   const initialX = SCREEN_WIDTH - WIDGET_SIZE - SNAP_MARGIN;
   const initialY = 130;
 
-  const pan = React.useRef(
-    new Animated.ValueXY({ x: initialX, y: initialY })
-  ).current;
-  const panRef = React.useRef({ x: initialX, y: initialY });
+  const pan = useRef(new Animated.ValueXY({ x: initialX, y: initialY })).current;
+  const panRef = useRef({ x: initialX, y: initialY });
 
-  React.useEffect(() => {
+  useEffect(() => {
     const id = pan.addListener((val) => {
       panRef.current = val;
     });
@@ -271,7 +284,7 @@ function DraggableCountdown({
 
   const clampY = (y: number) => Math.min(Math.max(y, MIN_Y), MAX_Y);
 
-  const panResponder = React.useRef(
+  const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
@@ -283,10 +296,7 @@ function DraggableCountdown({
         pan.x.setValue(panRef.current.x + gesture.dx - panRef.current.x);
         const offsetY = (pan.y as any)._offset ?? 0;
         pan.y.setValue(
-          Math.min(
-            Math.max(gesture.dy, MIN_Y - offsetY),
-            MAX_Y - offsetY
-          )
+          Math.min(Math.max(gesture.dy, MIN_Y - offsetY), MAX_Y - offsetY)
         );
       },
       onPanResponderRelease: () => {
@@ -327,12 +337,10 @@ function DraggableCountdown({
 // ─── Countdown Ring ────────────────────────────────────────────────────────────
 
 function CountdownRing({ secondsLeft }: { secondsLeft: number }) {
-  const size = 82;
-  const strokeWidth = 12;
+  const size = 90;
+  const strokeWidth = 18;
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
-  // Use 10 minutes (600 seconds) as the max for the ring
-  const TOTAL_SECONDS = 10 * 60;
   const progress = secondsLeft / TOTAL_SECONDS;
   const strokeDashoffset = circumference * (1 - progress);
 
@@ -364,7 +372,6 @@ function CountdownRing({ secondsLeft }: { secondsLeft: number }) {
   );
 }
 
-
 // ─── Partner Card ──────────────────────────────────────────────────────────────
 
 function PartnerCard({ spaces, spacesColor, name, address, price }: any) {
@@ -395,7 +402,7 @@ const styles = StyleSheet.create({
   },
 
   header: {
-    top: -25,
+    top: -50,
     height: 70,
     alignItems: "center",
     justifyContent: "center",
@@ -408,13 +415,19 @@ const styles = StyleSheet.create({
 
   logo: {
     width: 145,
-    height: 60,
+    height: 55,
   },
 
   bellWrapper: {
     position: "absolute",
-    right: 10,
-    top: 20,
+    top: 10,
+    right: 30,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "rgba(76,76,76,0.45)",
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   notificationDot: {
@@ -446,8 +459,7 @@ const styles = StyleSheet.create({
 
   sectionTitle: {
     color: "#fff",
-    fontSize: 26,
-    marginTop: 25,
+    fontSize: 30,
     marginBottom: 15,
   },
 
@@ -457,6 +469,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     padding: 10,
     height: 130,
+    marginBottom: 36,
   },
 
   imagePlaceholder: {
@@ -473,8 +486,9 @@ const styles = StyleSheet.create({
 
   currentName: {
     color: "#fff",
-    fontSize: 16,
+    fontSize: 20,
     fontWeight: "600",
+    marginTop: 15,
   },
 
   currentAddress: {
@@ -484,12 +498,13 @@ const styles = StyleSheet.create({
   },
 
   statusBadge: {
-    marginTop: 55,
     backgroundColor: "rgba(106,202,106,0.3)",
-    borderRadius: 50,
+    position: "absolute",
+    bottom: 0,
+    borderRadius: 20,
     paddingHorizontal: 10,
-    paddingVertical: 3,
-    alignSelf: "flex-start",
+    paddingVertical: 4,
+    height: 21,
   },
 
   statusText: {
@@ -504,7 +519,8 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(237,0,0,0.7)",
     borderRadius: 20,
     paddingHorizontal: 10,
-    paddingVertical: 3,
+    paddingVertical: 5,
+    height: 21,
   },
 
   spotsText: {
@@ -513,7 +529,8 @@ const styles = StyleSheet.create({
   },
 
   partnerCard: {
-    width: 170,
+    width: 250,
+    height: 260,
     backgroundColor: "#323232",
     borderRadius: 15,
     padding: 8,
@@ -521,13 +538,14 @@ const styles = StyleSheet.create({
   },
 
   partnerImagePlaceholder: {
-    height: 90,
+    height: 135,
     borderRadius: 8,
     backgroundColor: "#555",
   },
 
   partnerBadge: {
-    marginTop: -15,
+    marginTop: -20,
+    marginLeft: 5,
     alignSelf: "flex-start",
     borderRadius: 20,
     paddingHorizontal: 8,
@@ -541,26 +559,30 @@ const styles = StyleSheet.create({
 
   partnerName: {
     color: "#fff",
-    fontSize: 14,
-    fontWeight: "700",
-    marginTop: 10,
+    fontSize: 18,
+    fontWeight: "600",
+    marginTop: 20,
+    marginLeft: 5,
   },
 
   partnerAddress: {
     color: "#9D9D9D",
-    fontSize: 10,
+    fontSize: 12,
+    marginTop: 3,
+    marginLeft: 5,
   },
 
   partnerPrice: {
     color: "#fff",
-    fontSize: 14,
+    fontSize: 18,
     fontWeight: "700",
-    marginTop: 10,
+    marginTop: 35,
+    marginLeft: 5,
   },
 
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.55)",
+    backgroundColor: "#ED0000",
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 24,

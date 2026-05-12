@@ -19,7 +19,6 @@ import { fetchParkingById, ParkingLot } from "@/services/parkingService";
 export default function ParkingDetailScreen() {
   const params = useLocalSearchParams();
 
-  // Support both old string params and new parkingId param
   const parkingId = params.parkingId ? Number(params.parkingId) : null;
 
   const [parking, setParking] = useState<ParkingLot | null>(null);
@@ -31,10 +30,7 @@ export default function ParkingDetailScreen() {
   const images = [1, 2, 3];
 
   useEffect(() => {
-    if (!parkingId) {
-      // Fallback: use route params if no parkingId (backwards compat)
-      return;
-    }
+    if (!parkingId) return;
 
     let cancelled = false;
 

@@ -30,7 +30,7 @@ export default function NoNotificationsScreen() {
         />
 
         <Text style={styles.emptyText}>
-          Ju nuk keni asnje njoftim per momentin.
+          Ju nuk keni asnjë njoftim për momentin.
         </Text>
       </View>
     </SafeAreaView>

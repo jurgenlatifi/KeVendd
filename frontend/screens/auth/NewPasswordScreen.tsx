@@ -12,6 +12,7 @@ import AuthButton from "@/components/auth/AuthButton";
 import AuthHeader from "@/components/auth/AuthHeader";
 import AuthLayout from "@/components/auth/AuthLayout";
 import PasswordInput from "@/components/auth/PasswordInput";
+import BackButton from "@/components/common/BackButton";
 
 export default function NewPasswordScreen() {
   const [password, setPassword] = useState("");
@@ -39,6 +40,7 @@ export default function NewPasswordScreen() {
     <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
       <View style={{ flex: 1 }}>
         <AuthLayout>
+        <BackButton/>
           <AuthHeader title="Ndrysho Fjalëkalimin" />
 
           <View style={styles.formContainer}>

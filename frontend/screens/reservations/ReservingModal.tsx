@@ -32,6 +32,7 @@ export default function ReservingModal({
   parkingId,
 }: Props) {
   const FLAT_FEE = 50; // One-time reservation fee in ALL
+
   const [plate, setPlate] = useState("AB 123 JK");
   const [payment, setPayment] = useState(
     "PayPal Account: username@gmail.com"
@@ -52,13 +53,8 @@ export default function ReservingModal({
 
   const saveEdit = () => {
     if (newValue.trim()) {
-      if (editType === "plate") {
-        setPlate(newValue.trim());
-      }
-
-      if (editType === "payment") {
-        setPayment(newValue.trim());
-      }
+      if (editType === "plate") setPlate(newValue.trim());
+      if (editType === "payment") setPayment(newValue.trim());
     }
 
     setEditType(null);
@@ -91,9 +87,10 @@ export default function ReservingModal({
       );
 
       // Step 3: Confirm the reservation
-      const confirmed = await confirmReservation(reservation.id);
+      await confirmReservation(reservation.id);
 
-      // Reservation confirmed successfully
+      await AsyncStorage.setItem("reservationStartTime", String(Date.now()));
+
       onClose();
 
       setTimeout(() => {
@@ -149,7 +146,7 @@ export default function ReservingModal({
                   </Pressable>
 
                   <Text style={styles.title}>
-                    Rezervimi i vendit tuaj - {FLAT_FEE} ALL
+                    Rezervimi do të mbahet për 10 min.
                   </Text>
 
                   <Text style={styles.sectionTitle}>Targa e Mjetit :</Text>
@@ -194,7 +191,6 @@ export default function ReservingModal({
 
                     <Text style={styles.changeText}>Zgjidh mënyre tjetër</Text>
                   </Pressable>
-
 
                   {totalCost > 0 && (
                     <Text style={styles.totalText}>
@@ -408,48 +404,6 @@ const styles = StyleSheet.create({
     marginLeft: 6,
     color: "#000000",
     fontWeight: "500",
-  },
-
-  hourRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginTop: 18,
-  },
-
-  hourLabel: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#000000",
-  },
-
-  hourSelector: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 14,
-  },
-
-  hourBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: "#ECECEC",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  hourBtnText: {
-    fontSize: 20,
-    fontWeight: "600",
-    color: "#000",
-  },
-
-  hourValue: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#000",
-    minWidth: 24,
-    textAlign: "center",
   },
 
   totalText: {

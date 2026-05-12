@@ -17,6 +17,8 @@ import AuthHeader from "@/components/auth/AuthHeader";
 import AuthLayout from "@/components/auth/AuthLayout";
 import colors from "@/constants/colors";
 import fonts from "@/constants/fonts";
+import BackButton from "@/components/common/BackButton";
+
 
 export default function VerifyCodeScreen() {
   const correctCode = "12345";
@@ -84,6 +86,7 @@ export default function VerifyCodeScreen() {
     <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
       <View style={{ flex: 1 }}>
         <AuthLayout>
+        <BackButton />
           <AuthHeader title="Ndrysho Fjalëkalimin" />
 
           <View style={styles.formContainer}>
@@ -131,7 +134,7 @@ export default function VerifyCodeScreen() {
 
 const styles = StyleSheet.create({
   formContainer: {
-    marginTop: 95,
+    marginTop: 65,
     alignItems: "center",
   },
 
@@ -151,8 +154,8 @@ const styles = StyleSheet.create({
   },
 
   codeInput: {
-    width: 52,
-    height: 58,
+    width: 63,
+    height: 73,
     backgroundColor: colors.white,
     borderRadius: 12,
     fontSize: 22,

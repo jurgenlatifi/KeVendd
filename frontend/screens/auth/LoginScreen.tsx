@@ -1,7 +1,6 @@
 import { router } from "expo-router";
 import React, { useState } from "react";
 import {
-  ActivityIndicator,
   Keyboard,
   StyleSheet,
   Text,
@@ -10,7 +9,6 @@ import {
   View,
 } from "react-native";
 
-import api from "@/api";
 import AuthButton from "@/components/auth/AuthButton";
 import AuthFooter from "@/components/auth/AuthFooter";
 import AuthHeader from "@/components/auth/AuthHeader";
@@ -18,16 +16,14 @@ import AuthLayout from "@/components/auth/AuthLayout";
 import CustomInput from "@/components/auth/CustomInput";
 import PasswordInput from "@/components/auth/PasswordInput";
 import colors from "@/constants/colors";
-import { saveTokens } from "@/services/authService";
 
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [secureText, setSecureText] = useState(true);
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
 
-  const handleLogin = async () => {
+  const handleLogin = () => {
     setError("");
 
     if (!email || !password) {
@@ -35,21 +31,7 @@ export default function LoginScreen() {
       return;
     }
 
-    try {
-      setLoading(true);
-      const response = await api.post("/auth/login", { email, password });
-
-      await saveTokens(response.data);
-      router.replace("/(tabs)/map");
-    } catch (err: any) {
-      if (err.response?.data?.message) {
-        setError(err.response.data.message);
-      } else {
-        setError("Diçka shkoi keq. Provoni përsëri.");
-      }
-    } finally {
-      setLoading(false);
-    }
+    router.replace("/(tabs)/map");
   };
 
   return (
@@ -90,11 +72,7 @@ export default function LoginScreen() {
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
           <View style={styles.buttonContainer}>
-            {loading ? (
-              <ActivityIndicator size="large" color="#000" />
-            ) : (
-              <AuthButton title="Kyçu" onPress={handleLogin} />
-            )}
+            <AuthButton title="Kyçu" onPress={handleLogin} />
           </View>
 
           <AuthFooter

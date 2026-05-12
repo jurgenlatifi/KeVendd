@@ -1,8 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { router } from "expo-router";
-import React, { useRef, useState } from "react";
+import { router, useFocusEffect } from "expo-router";
+import React, { useCallback, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Image,
   Keyboard,
   Pressable,
@@ -14,45 +15,41 @@ import {
   View,
 } from "react-native";
 import MapView, { Marker } from "react-native-maps";
-
-type Property = {
-  id: number;
-  name: string;
-  address: string;
-  latitude: number;
-  longitude: number;
-};
-
-const properties: Property[] = [
-  {
-    id: 1,
-    name: "Parkimi Toptani",
-    address: "Toptani Center, Tiranë",
-    latitude: 41.3277,
-    longitude: 19.8216,
-  },
-  {
-    id: 2,
-    name: "Parkimi Skënderbej",
-    address: "Sheshi Skënderbej, Tiranë",
-    latitude: 41.3275,
-    longitude: 19.8189,
-  },
-  {
-    id: 3,
-    name: "Parkimi Blloku",
-    address: "Blloku, Tiranë",
-    latitude: 41.3186,
-    longitude: 19.8156,
-  },
-];
+import { fetchParkingLots, ParkingLot } from "@/services/parkingService";
 
 export default function MapGuestScreen() {
   const mapRef = useRef<MapView | null>(null);
 
+  const [parkingLots, setParkingLots] = useState<ParkingLot[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchText, setSearchText] = useState("");
-  const [searchPin, setSearchPin] = useState<Property | null>(null);
+  const [searchPin, setSearchPin] = useState<ParkingLot | null>(null);
   const [showSuggestions, setShowSuggestions] = useState(false);
+
+  // ── Fetch parking lots from the backend on every tab focus ──
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+
+      (async () => {
+        try {
+          setLoading(true);
+          const data = await fetchParkingLots();
+          if (!cancelled) setParkingLots(data);
+        } catch (err) {
+          console.warn("Failed to load parking lots", err);
+        } finally {
+          if (!cancelled) setLoading(false);
+        }
+      })();
+
+      return () => {
+        cancelled = true;
+      };
+    }, [])
+  );
+
+  // ── Search helpers ──
 
   const startsWithSearch = (value: string, text: string) => {
     return value
@@ -61,26 +58,25 @@ export default function MapGuestScreen() {
       .some((word) => word.startsWith(text));
   };
 
-  const filteredSuggestions = properties.filter((property) => {
+  const filteredSuggestions = parkingLots.filter((lot) => {
     const text = searchText.trim().toLowerCase();
-
     if (!text) return false;
 
     return (
-      startsWithSearch(property.name, text) ||
-      startsWithSearch(property.address, text)
+      startsWithSearch(lot.name, text) ||
+      (lot.zone ? startsWithSearch(lot.zone, text) : false)
     );
   });
 
-  const focusLocation = (property: Property) => {
-    setSearchPin(property);
+  const focusLocation = (lot: ParkingLot) => {
+    setSearchPin(lot);
     Keyboard.dismiss();
     setShowSuggestions(false);
 
     mapRef.current?.animateToRegion(
       {
-        latitude: property.latitude,
-        longitude: property.longitude,
+        latitude: lot.latitude,
+        longitude: lot.longitude,
         latitudeDelta: 0.006,
         longitudeDelta: 0.006,
       },
@@ -90,18 +86,17 @@ export default function MapGuestScreen() {
 
   const handleSearch = () => {
     const text = searchText.trim().toLowerCase();
-
     if (!text) return;
 
-    const foundProperty = properties.find(
-      (property) =>
-        startsWithSearch(property.name, text) ||
-        startsWithSearch(property.address, text)
+    const found = parkingLots.find(
+      (lot) =>
+        startsWithSearch(lot.name, text) ||
+        (lot.zone ? startsWithSearch(lot.zone, text) : false)
     );
 
-    if (foundProperty) {
-      setSearchText(foundProperty.name);
-      focusLocation(foundProperty);
+    if (found) {
+      setSearchText(found.name);
+      focusLocation(found);
     }
   };
 
@@ -121,18 +116,18 @@ export default function MapGuestScreen() {
         showsMyLocationButton={false}
         toolbarEnabled={false}
       >
-        {properties.map((property) => (
+        {parkingLots.map((lot) => (
           <Marker
-            key={property.id}
+            key={lot.id}
             coordinate={{
-              latitude: property.latitude,
-              longitude: property.longitude,
+              latitude: lot.latitude,
+              longitude: lot.longitude,
             }}
-            title={property.name}
-            description={property.address}
+            title={lot.name}
+            description={lot.zone ?? ""}
             onPress={() => {
               setSearchText("");
-              focusLocation(property);
+              focusLocation(lot);
             }}
           />
         ))}
@@ -145,10 +140,16 @@ export default function MapGuestScreen() {
             }}
             pinColor="red"
             title={searchPin.name}
-            description={searchPin.address}
+            description={searchPin.zone ?? ""}
           />
         )}
       </MapView>
+
+      {loading && (
+        <View style={styles.loadingOverlay}>
+          <ActivityIndicator size="large" color="#ED0000" />
+        </View>
+      )}
 
       <TouchableWithoutFeedback
         onPress={() => {
@@ -182,31 +183,28 @@ export default function MapGuestScreen() {
               returnKeyType="search"
               onSubmitEditing={handleSearch}
             />
-                    <Pressable onPress={handleSearch}>
-                      <Ionicons name="arrow-forward-circle" size={24} color="#ED0000" />
-                    </Pressable>
+
+            <Pressable onPress={handleSearch}>
+              <Ionicons name="arrow-forward-circle" size={24} color="#ED0000" />
+            </Pressable>
           </View>
 
           {showSuggestions && filteredSuggestions.length > 0 && (
             <View style={styles.suggestionsBox}>
-              {filteredSuggestions.map((property) => (
+              {filteredSuggestions.map((lot) => (
                 <Pressable
-                  key={property.id}
+                  key={lot.id}
                   style={styles.suggestionItem}
                   onPress={() => {
-                    setSearchText(property.name);
-                    focusLocation(property);
+                    setSearchText(lot.name);
+                    focusLocation(lot);
                   }}
                 >
                   <Ionicons name="location" size={18} color="#ED0000" />
 
                   <View style={styles.suggestionTextWrapper}>
-                    <Text style={styles.suggestionTitle}>
-                      {property.name}
-                    </Text>
-                    <Text style={styles.suggestionAddress}>
-                      {property.address}
-                    </Text>
+                    <Text style={styles.suggestionTitle}>{lot.name}</Text>
+                    <Text style={styles.suggestionAddress}>{lot.zone ?? ""}</Text>
                   </View>
                 </Pressable>
               ))}
@@ -254,19 +252,29 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
   },
 
+  loadingOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.3)",
+    zIndex: 50,
+  },
+
   logoWrapper: {
     position: "absolute",
-    top: 10,
+    top: 55,
     alignSelf: "center",
-    width: 700,
-    height: 185,
     alignItems: "center",
     justifyContent: "center",
   },
 
   logo: {
-    width: 700,
-    height: 185,
+    width: 145,
+    height: 55,
   },
 
   searchBox: {

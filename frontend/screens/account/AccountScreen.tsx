@@ -142,7 +142,7 @@ export default function AccountScreen() {
                     <TextInput
                       style={styles.inputText}
                       placeholder="Emri"
-                      placeholderTextColor="#FFFFFF"
+                      placeholderTextColor="rgba(225, 225, 225, 0.83)"
                       value={name}
                       onChangeText={setName}
                     />
@@ -155,7 +155,7 @@ export default function AccountScreen() {
                     <TextInput
                       style={styles.inputText}
                       placeholder="Mbiemri"
-                      placeholderTextColor="#FFFFFF"
+                      placeholderTextColor="rgba(225, 225, 225, 0.83)"
                       value={surname}
                       onChangeText={setSurname}
                     />
@@ -170,7 +170,7 @@ export default function AccountScreen() {
                     <TextInput
                       style={styles.inputText}
                       placeholder="Nr."
-                      placeholderTextColor="#FFFFFF"
+                      placeholderTextColor="rgba(225, 225, 225, 0.83)"
                       value={phone}
                       onChangeText={setPhone}
                       keyboardType="phone-pad"
@@ -218,7 +218,7 @@ export default function AccountScreen() {
                   <View key={index} style={styles.darkCard}>
                     <Image
                       source={require("../../assets/paypal.png")}
-                      style={{ width: 28, height: 28, resizeMode: "contain" }}
+                      style={{ width: 28, height: 28, resizeMode: "contain", marginLeft: -5, marginRight: 5 }}
                     />
                     <Text style={styles.paymentText}>
                       PayPal Account: {payment}
@@ -264,37 +264,6 @@ export default function AccountScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* Photo options modal */}
-      <Modal visible={photoOptionsVisible} transparent animationType="fade">
-        <Pressable
-          style={styles.overlay}
-          onPress={() => setPhotoOptionsVisible(false)}
-        >
-          <Pressable style={styles.photoOptionsModal}>
-            <Pressable
-              style={styles.photoOptionRow}
-              onPress={() => {
-                setPhotoOptionsVisible(false);
-                console.log("View photo");
-              }}
-            >
-              <Ionicons name="eye-outline" size={22} color="#000000" />
-              <Text style={styles.photoOptionText}>Shiko foton</Text>
-            </Pressable>
-            <View style={styles.photoOptionDivider} />
-            <Pressable
-              style={styles.photoOptionRow}
-              onPress={() => {
-                setPhotoOptionsVisible(false);
-                console.log("Change photo");
-              }}
-            >
-              <Ionicons name="camera-outline" size={22} color="#000000" />
-              <Text style={styles.photoOptionText}>Ndrysho foton</Text>
-            </Pressable>
-          </Pressable>
-        </Pressable>
-      </Modal>
 
       {/* Plate modal */}
       <Modal visible={plateModalVisible} transparent animationType="fade">
