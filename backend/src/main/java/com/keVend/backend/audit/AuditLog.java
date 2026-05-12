@@ -34,4 +34,13 @@ public class AuditLog {
                 "currency", currency,
                 "amount", amount);
     }
+
+    public void profileUpdated(Long userId) {
+        AUDIT.info("AUDIT profile_updated userId={}", userId);
+    }
+
+    public void credentialsUpdated(Long userId, boolean emailChanged) {
+        AUDIT.info("AUDIT credentials_updated userId={} emailChanged={}", userId, emailChanged);
+    }
+
 }

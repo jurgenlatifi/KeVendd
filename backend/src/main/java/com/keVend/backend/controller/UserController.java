@@ -1,5 +1,8 @@
 package com.keVend.backend.controller;
 
+import com.keVend.backend.dto.UpdateCredentialsRequest;
+import com.keVend.backend.dto.UpdateUserRequest;
+import com.keVend.backend.dto.UserProfileResponse;
 import com.keVend.backend.security.UserDetailsImpl;
 import com.keVend.backend.service.UserService;
 import lombok.RequiredArgsConstructor;
@@ -17,7 +20,9 @@ public class UserController {
     private final UserService userService;
 
     @GetMapping("/me")
-    public ResponseEntity<Map<String, Object>> me(@AuthenticationPrincipal UserDetailsImpl principal) {
+    public ResponseEntity<UserProfileResponse> getProfile(
+            @AuthenticationPrincipal UserDetailsImpl principal
+    ) {
         return ResponseEntity.ok(userService.profile(principal.getUser()));
     }
 
@@ -35,6 +40,25 @@ public class UserController {
             @RequestParam String locale
     ) {
         userService.setPreferredLocale(principal.getUser(), locale);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PutMapping("/me")
+    public ResponseEntity<?> updateProfile(
+            @AuthenticationPrincipal UserDetailsImpl principal,
+            @RequestBody UpdateUserRequest request
+    ) {
+        return ResponseEntity.ok(
+                userService.updateProfile(principal.getUser(), request)
+        );
+    }
+
+    @PutMapping("/me/credentials")
+    public ResponseEntity<?> updateCredentials(
+            @AuthenticationPrincipal UserDetailsImpl principal,
+            @RequestBody UpdateCredentialsRequest request
+    ) {
+        userService.updateCredentials(principal.getUser(), request);
         return ResponseEntity.noContent().build();
     }
 }
