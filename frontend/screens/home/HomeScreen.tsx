@@ -1,13 +1,9 @@
-import { Ionicons } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { router, useFocusEffect } from "expo-router";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import { router } from "expo-router";
+import React, { useCallback, useEffect, useState } from "react";
 import {
-  Animated,
-  Dimensions,
+  ActivityIndicator,
   Image,
-  Modal,
-  PanResponder,
+  Image as RNImage,
   Pressable,
   SafeAreaView,
   ScrollView,
@@ -15,61 +11,122 @@ import {
   Text,
   View,
 } from "react-native";
-import Svg, { Circle } from "react-native-svg";
 
-const TOTAL_SECONDS = 10 * 60;
+import { useI18n } from "@/i18n/I18nProvider";
+import { fetchParkingById } from "@/services/parkingService";
+import { openReservationOverlay } from "@/services/reservationOverlay";
+import {
+  fetchCurrentReservation,
+  getCachedCurrentReservation,
+  getCachedReservationHistory,
+  fetchMyHistory,
+  ReservationData,
+  subscribeReservationChanges,
+} from "@/services/reservationService";
 
-export default function HomeScreen() {
-  const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
-  const [hasActiveReservation, setHasActiveReservation] = useState(false);
-  const [expiredModalVisible, setExpiredModalVisible] = useState(false);
+type ParkingPreviewMap = Record<number, string | null>;
 
-  const hasNotifications = false;
+function isFutureTimestamp(value?: string | null) {
+  if (!value) return false;
+  const timestamp = new Date(value).getTime();
+  return Number.isFinite(timestamp) && timestamp > Date.now();
+}
 
-  useFocusEffect(
-    useCallback(() => {
-      let timer: ReturnType<typeof setInterval> | null = null;
+function isReservationActive(reservation: ReservationData) {
+  if (reservation.status === "CONFIRMED") {
+    return isFutureTimestamp(reservation.endTime);
+  }
 
-      const updateCountdown = async () => {
-        const savedStartTime = await AsyncStorage.getItem("reservationStartTime");
+  if (reservation.status === "COMPLETED") {
+    return isFutureTimestamp(reservation.endTime);
+  }
 
-        if (!savedStartTime) {
-          setHasActiveReservation(false);
-          setSecondsLeft(null);
-          return;
-        }
+  return false;
+}
 
-        const now = Date.now();
-        const elapsed = Math.floor((now - Number(savedStartTime)) / 1000);
-        const remaining = TOTAL_SECONDS - elapsed;
-
-        if (remaining <= 0) {
-          await AsyncStorage.removeItem("reservationStartTime");
-          setHasActiveReservation(false);
-          setSecondsLeft(null);
-          setExpiredModalVisible(true);
-          return;
-        }
-
-        setHasActiveReservation(true);
-        setSecondsLeft(remaining);
-      };
-
-      updateCountdown();
-
-      timer = setInterval(() => {
-        updateCountdown();
-      }, 1000);
-
-      return () => {
-        if (timer) clearInterval(timer);
-      };
-    }, [])
+async function buildParkingPreviewMap(reservations: ReservationData[]) {
+  const uniqueParkingIds = [...new Set(reservations.map((item) => item.parkingId).filter(Boolean))];
+  const previews = await Promise.all(
+    uniqueParkingIds.map(async (parkingId) => {
+      try {
+        const parking = await fetchParkingById(parkingId);
+        return [parkingId, parking.imageUrls[0] ?? null] as const;
+      } catch {
+        return [parkingId, null] as const;
+      }
+    })
   );
 
-  const minutes = secondsLeft !== null ? Math.floor(secondsLeft / 60) : 0;
-  const seconds = secondsLeft !== null ? secondsLeft % 60 : 0;
-  const timeText = `${minutes}:${seconds.toString().padStart(2, "0")}`;
+  return Object.fromEntries(previews) as ParkingPreviewMap;
+}
+
+export default function HomeScreen() {
+  const { t } = useI18n();
+  const [activeReservation, setActiveReservation] = useState<ReservationData | null>(null);
+  const [previousReservations, setPreviousReservations] = useState<ReservationData[]>([]);
+  const [parkingPreviews, setParkingPreviews] = useState<ParkingPreviewMap>({});
+  const [loading, setLoading] = useState(true);
+
+  const loadHomeData = useCallback(async (cancelledRef?: { current: boolean }) => {
+    try {
+      const cachedCurrent = getCachedCurrentReservation();
+      const cachedHistory = getCachedReservationHistory();
+
+      if (cachedCurrent || cachedHistory) {
+        const activeFromCache =
+          cachedCurrent && isReservationActive(cachedCurrent)
+            ? cachedCurrent
+            : cachedHistory?.find(isReservationActive) ?? null;
+        const previousFromCache = (cachedHistory ?? [])
+          .filter((r) => r.id !== activeFromCache?.id)
+          .slice(0, 4);
+        setActiveReservation(activeFromCache);
+        setPreviousReservations(previousFromCache);
+        setLoading(false);
+      } else {
+        setLoading(true);
+      }
+
+      const [currentReservation, history] = await Promise.all([
+        fetchCurrentReservation().catch(() => null),
+        fetchMyHistory().catch(() => [] as ReservationData[]),
+      ]);
+      if (cancelledRef?.current) return;
+
+      const active =
+        currentReservation && isReservationActive(currentReservation)
+          ? currentReservation
+          : history.find(isReservationActive);
+      const nextPreviousReservations = history.filter((r) => r.id !== active?.id).slice(0, 4);
+      const previewMap = await buildParkingPreviewMap(
+        [active, ...nextPreviousReservations].filter(Boolean) as ReservationData[]
+      );
+      if (cancelledRef?.current) return;
+
+      setActiveReservation(active ?? null);
+      setPreviousReservations(nextPreviousReservations);
+      setParkingPreviews(previewMap);
+    } catch (err) {
+      console.warn("Failed to load home data", err);
+    } finally {
+      if (!cancelledRef?.current) {
+        setLoading(false);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    const cancelledRef = { current: false };
+    void loadHomeData(cancelledRef);
+    const unsubscribe = subscribeReservationChanges(() => {
+      void loadHomeData(cancelledRef);
+    });
+
+    return () => {
+      cancelledRef.current = true;
+      unsubscribe();
+    };
+  }, [loadHomeData]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -82,230 +139,126 @@ export default function HomeScreen() {
               resizeMode="contain"
             />
           </View>
-
-          <Pressable
-            style={styles.bellWrapper}
-            onPress={() => {
-              if (hasNotifications) {
-                router.push("(screens)/notifications");
-              } else {
-                router.push("(screens)/no-notifications");
-              }
-            }}
-          >
-            <Ionicons name="notifications-outline" size={28} color="#fff" />
-            {hasNotifications && <View style={styles.notificationDot} />}
-          </Pressable>
         </View>
 
-        <Text style={styles.sectionTitle}>Rezervimi Aktual</Text>
+        <Text style={styles.sectionTitle}>{t("home.currentReservation")}</Text>
 
-        <View style={styles.currentCard}>
-          <View style={styles.imagePlaceholder} />
+        {loading ? (
+          <ActivityIndicator size="large" color="#ED0000" style={styles.loadingBlock} />
+        ) : activeReservation ? (
+          <Pressable style={styles.currentCard} onPress={openReservationOverlay}>
+            {parkingPreviews[activeReservation.parkingId] ? (
+              <RNImage
+                source={{ uri: parkingPreviews[activeReservation.parkingId] as string }}
+                style={styles.previewImage}
+              />
+            ) : (
+              <View style={styles.imagePlaceholder} />
+            )}
 
-          <View style={styles.currentInfo}>
-            <Text style={styles.currentName}>Avni Rustemi Parking</Text>
-            <Text style={styles.currentAddress}>
-              Sheshi Avni Rustemi, Tiranë
-            </Text>
+            <View style={styles.currentInfo}>
+              <Text style={styles.currentName}>{activeReservation.parkingName}</Text>
+              <Text style={styles.currentAddress}>
+                {activeReservation.totalCost ? `${activeReservation.totalCost} ALL` : ""}
+              </Text>
+              <View style={styles.statusBadge}>
+                <Text style={styles.statusText}>
+                  {activeReservation.status === "CONFIRMED"
+                    ? t("home.confirmed")
+                    : t("home.pending")}
+                </Text>
+              </View>
+            </View>
 
-            <View style={styles.statusBadge}>
-              <Text style={styles.statusText}>Hapur</Text>
+            <View style={styles.spotsBadge}>
+              <Text style={styles.spotsText}>
+                {t("home.freeSpots", {
+                  count: activeReservation.parkingAvailableSpots ?? activeReservation.spotsReserved,
+                })}
+              </Text>
+            </View>
+          </Pressable>
+        ) : (
+          <View style={styles.currentCard}>
+            <View style={styles.imagePlaceholder} />
+            <View style={styles.currentInfo}>
+              <Text style={styles.currentName}>{t("home.noCurrentReservation")}</Text>
+              <Text style={styles.currentAddress}>{t("home.goToMap")}</Text>
             </View>
           </View>
+        )}
 
-          <View style={styles.spotsBadge}>
-            <Text style={styles.spotsText}>5 vende</Text>
-          </View>
-        </View>
+        <Text style={styles.sectionTitle}>{t("home.previousReservations")}</Text>
 
-        <Text style={styles.sectionTitle}>Bashkëpunimet Tona</Text>
+        {loading ? (
+          <ActivityIndicator size="small" color="#ED0000" style={styles.loadingBlock} />
+        ) : (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            {previousReservations.map((item) => (
+              <Pressable
+                key={item.id}
+                onPress={() =>
+                  router.push({
+                    pathname: "/parking-detail",
+                    params: { parkingId: String(item.parkingId) },
+                  })
+                }
+              >
+                <HistoryPreviewCard
+                  imageUrl={parkingPreviews[item.parkingId]}
+                  spots={t("home.freeSpots", { count: item.spotsReserved })}
+                  statusColor={
+                    item.status === "CONFIRMED" || item.status === "SOFT_HOLD"
+                      ? "#6ACA6A"
+                      : "#ED0000"
+                  }
+                  name={item.parkingName}
+                  address={
+                    item.vehiclePlate
+                      ? t("home.plateLabel", { plate: item.vehiclePlate })
+                      : t("home.yourReservation")
+                  }
+                  price={`${item.totalCost} ALL`}
+                />
+              </Pressable>
+            ))}
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <PartnerCard
-            spaces="10 vende të lira"
-            spacesColor="#6ACA6A"
-            name="TopTani Shopping Center"
-            address="Rruga Abdi Toptani, Tiranë"
-            price="200ALL/ Ora"
-          />
-
-          <PartnerCard
-            spaces="3 vende të lira"
-            spacesColor="#ED0000"
-            name="Parkimi Nentokesore"
-            address="Rruga Ibrahim Rugova, Tiranë"
-            price="200ALL/ Ora"
-          />
-        </ScrollView>
+            {previousReservations.length === 0 && (
+              <Text style={styles.emptyText}>{t("home.noPreviousReservations")}</Text>
+            )}
+          </ScrollView>
+        )}
       </ScrollView>
 
-      {/* Draggable countdown rendered outside ScrollView so it floats freely */}
-      {hasActiveReservation && secondsLeft !== null && (
-        <DraggableCountdown secondsLeft={secondsLeft} timeText={timeText} />
-      )}
-
-      <Modal visible={expiredModalVisible} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={styles.expiredModal}>
-            <View style={styles.expiredCircle}>
-              <Ionicons name="time-outline" size={52} color="#FFFFFF" />
-            </View>
-
-            <Text style={styles.expiredTitle}>
-              Koha e rezervimit përfundoi.
-            </Text>
-
-            <Text style={styles.expiredText}>
-              Nëse nuk keni arritur në parkimin e zgjedhur, ju nuk do të keni
-              një vend të rezervuar.
-            </Text>
-
-            <Pressable
-              style={styles.okButton}
-              onPress={() => setExpiredModalVisible(false)}
-            >
-              <Text style={styles.okButtonText}>Në rregull</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
     </SafeAreaView>
   );
 }
 
-// ─── Draggable Countdown ───────────────────────────────────────────────────────
-
-function DraggableCountdown({
-  secondsLeft,
-  timeText,
+function HistoryPreviewCard({
+  spots,
+  statusColor,
+  name,
+  address,
+  price,
+  imageUrl,
 }: {
-  secondsLeft: number;
-  timeText: string;
+  spots: string;
+  statusColor: string;
+  name: string;
+  address: string;
+  price: string;
+  imageUrl?: string | null;
 }) {
-  const WIDGET_SIZE = 82;
-  const SCREEN_WIDTH = Dimensions.get("window").width;
-  const SCREEN_HEIGHT = Dimensions.get("window").height;
-  const SNAP_MARGIN = 12;
-
-  // Top boundary: below the header (~90px from top)
-  const MIN_Y = 90;
-  // Bottom boundary: tab bar is 61px tall, sits 17px from bottom → 78px total.
-  // Add a small 10px gap so the widget doesn't touch the tab bar.
-  const MAX_Y = SCREEN_HEIGHT - WIDGET_SIZE - 78 - 10;
-
-  const initialX = SCREEN_WIDTH - WIDGET_SIZE - SNAP_MARGIN;
-  const initialY = 130;
-
-  const pan = useRef(new Animated.ValueXY({ x: initialX, y: initialY })).current;
-  const panRef = useRef({ x: initialX, y: initialY });
-
-  useEffect(() => {
-    const id = pan.addListener((val) => {
-      panRef.current = val;
-    });
-    return () => pan.removeListener(id);
-  }, [pan]);
-
-  const clampY = (y: number) => Math.min(Math.max(y, MIN_Y), MAX_Y);
-
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: () => {
-        pan.setOffset({ x: panRef.current.x, y: panRef.current.y });
-        pan.setValue({ x: 0, y: 0 });
-      },
-      onPanResponderMove: (_, gesture) => {
-        const rawY = panRef.current.y + gesture.dy - panRef.current.y;
-        // Let Animated.event handle x; manually clamp y
-        pan.x.setValue(panRef.current.x + gesture.dx - panRef.current.x);
-        const offsetY = (pan.y as any)._offset ?? 0;
-        pan.y.setValue(Math.min(Math.max(gesture.dy, MIN_Y - offsetY), MAX_Y - offsetY));
-      },
-      onPanResponderRelease: () => {
-        pan.flattenOffset();
-
-        const currentX = panRef.current.x;
-        const currentY = clampY(panRef.current.y);
-
-        const snapX =
-          currentX + WIDGET_SIZE / 2 < SCREEN_WIDTH / 2
-            ? SNAP_MARGIN
-            : SCREEN_WIDTH - WIDGET_SIZE - SNAP_MARGIN;
-
-        Animated.spring(pan, {
-          toValue: { x: snapX, y: currentY },
-          useNativeDriver: false,
-          friction: 6,
-          tension: 80,
-        }).start();
-      },
-    })
-  ).current;
-
-  return (
-    <Animated.View
-      style={[
-        styles.draggableContainer,
-        { transform: pan.getTranslateTransform() },
-      ]}
-      {...panResponder.panHandlers}
-    >
-      <CountdownRing secondsLeft={secondsLeft} />
-      <Text style={styles.countdownText}>{timeText}</Text>
-    </Animated.View>
-  );
-}
-
-// ─── Countdown Ring ────────────────────────────────────────────────────────────
-
-function CountdownRing({ secondsLeft }: { secondsLeft: number }) {
-  const size = 82;
-  const strokeWidth = 12;
-  const radius = (size - strokeWidth) / 2;
-  const circumference = 2 * Math.PI * radius;
-  const progress = secondsLeft / TOTAL_SECONDS;
-  const strokeDashoffset = circumference * (1 - progress);
-
-  return (
-    <Svg width={size} height={size}>
-      <Circle
-        cx={size / 2}
-        cy={size / 2}
-        r={radius}
-        stroke="rgba(106,202,106,0.2)"
-        strokeWidth={strokeWidth}
-        fill="#000"
-      />
-      <Circle
-        cx={size / 2}
-        cy={size / 2}
-        r={radius}
-        stroke="rgba(106,202,106,0.9)"
-        strokeWidth={strokeWidth}
-        fill="transparent"
-        strokeDasharray={circumference}
-        strokeDashoffset={strokeDashoffset}
-        strokeLinecap="round"
-        rotation="-90"
-        originX={size / 2}
-        originY={size / 2}
-      />
-    </Svg>
-  );
-}
-
-// ─── Partner Card ──────────────────────────────────────────────────────────────
-
-function PartnerCard({ spaces, spacesColor, name, address, price }: any) {
   return (
     <View style={styles.partnerCard}>
-      <View style={styles.partnerImagePlaceholder} />
+      {imageUrl ? (
+        <RNImage source={{ uri: imageUrl }} style={styles.partnerImagePlaceholder} />
+      ) : (
+        <View style={styles.partnerImagePlaceholder} />
+      )}
 
-      <View style={[styles.partnerBadge, { backgroundColor: spacesColor }]}>
-        <Text style={styles.partnerBadgeText}>{spaces}</Text>
+      <View style={[styles.partnerBadge, { backgroundColor: statusColor }]}>
+        <Text style={styles.partnerBadgeText}>{spots}</Text>
       </View>
 
       <Text style={styles.partnerName}>{name}</Text>
@@ -315,233 +268,139 @@ function PartnerCard({ spaces, spacesColor, name, address, price }: any) {
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
-
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#000" },
-
   scrollContent: {
     paddingTop: 50,
     paddingHorizontal: 20,
     paddingBottom: 120,
   },
-
   header: {
-    top: -25,
+    top: -50,
     height: 70,
     alignItems: "center",
     justifyContent: "center",
   },
-
   logoContainer: {
     alignItems: "center",
     justifyContent: "center",
   },
-
   logo: {
     width: 145,
-    height: 60,
+    height: 55,
   },
-
-  bellWrapper: {
-    position: "absolute",
-    right: 10,
-    top: 20,
-  },
-
-  notificationDot: {
-    position: "absolute",
-    right: 2,
-    top: 2,
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: "#ED0000",
-  },
-
-  // Draggable floating widget
-  draggableContainer: {
-    position: "absolute",
-    width: 82,
-    height: 82,
-    alignItems: "center",
-    justifyContent: "center",
-    zIndex: 999,
-  },
-
-  countdownText: {
-    position: "absolute",
-    color: "#fff",
-    fontSize: 14,
-    fontWeight: "700",
-  },
-
   sectionTitle: {
-    color: "#fff",
-    fontSize: 26,
-    marginTop: 25,
-    marginBottom: 15,
+    color: "#FFFFFF",
+    fontSize: 28,
+    marginTop: 12,
+    marginBottom: 14,
   },
-
+  loadingBlock: {
+    marginVertical: 20,
+  },
   currentCard: {
     backgroundColor: "#323232",
-    borderRadius: 15,
+    borderRadius: 16,
+    padding: 12,
     flexDirection: "row",
-    padding: 10,
-    height: 130,
+    alignItems: "center",
+    marginBottom: 24,
   },
-
   imagePlaceholder: {
-    width: 120,
-    height: 110,
-    borderRadius: 10,
+    width: 110,
+    height: 90,
+    backgroundColor: "#555",
+    borderRadius: 12,
+  },
+  previewImage: {
+    width: 110,
+    height: 90,
+    borderRadius: 12,
     backgroundColor: "#555",
   },
-
   currentInfo: {
-    marginLeft: 10,
     flex: 1,
+    marginLeft: 12,
   },
-
   currentName: {
-    color: "#fff",
-    fontSize: 16,
+    color: "#FFFFFF",
+    fontSize: 18,
     fontWeight: "600",
   },
-
   currentAddress: {
-    color: "#9D9D9D",
-    fontSize: 12,
-    marginTop: 5,
+    color: "#BFBFBF",
+    fontSize: 13,
+    marginTop: 4,
   },
-
   statusBadge: {
-    marginTop: 55,
-    backgroundColor: "rgba(106,202,106,0.3)",
-    borderRadius: 50,
-    paddingHorizontal: 10,
-    paddingVertical: 3,
+    marginTop: 10,
     alignSelf: "flex-start",
+    backgroundColor: "rgba(106,202,106,0.28)",
+    borderRadius: 16,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
   },
-
   statusText: {
-    color: "#54E754",
+    color: "#FFFFFF",
     fontSize: 11,
+    fontWeight: "600",
   },
-
   spotsBadge: {
-    position: "absolute",
-    right: 10,
-    bottom: 10,
-    backgroundColor: "rgba(237,0,0,0.7)",
-    borderRadius: 20,
+    alignSelf: "flex-start",
+    backgroundColor: "#ED0000",
+    borderRadius: 18,
     paddingHorizontal: 10,
-    paddingVertical: 3,
+    paddingVertical: 7,
   },
-
   spotsText: {
-    color: "#fff",
-    fontSize: 10,
+    color: "#FFFFFF",
+    fontSize: 11,
+    fontWeight: "600",
   },
-
   partnerCard: {
-    width: 170,
-    backgroundColor: "#323232",
-    borderRadius: 15,
-    padding: 8,
-    marginRight: 15,
+    width: 230,
+    backgroundColor: "#191919",
+    borderRadius: 18,
+    marginRight: 14,
+    padding: 12,
   },
-
   partnerImagePlaceholder: {
-    height: 90,
-    borderRadius: 8,
-    backgroundColor: "#555",
+    width: "100%",
+    height: 120,
+    borderRadius: 14,
+    backgroundColor: "#444",
   },
-
   partnerBadge: {
-    marginTop: -15,
     alignSelf: "flex-start",
     borderRadius: 20,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    marginTop: 10,
   },
-
   partnerBadgeText: {
-    color: "#fff",
-    fontSize: 8,
+    color: "#FFFFFF",
+    fontSize: 11,
+    fontWeight: "600",
   },
-
   partnerName: {
-    color: "#fff",
-    fontSize: 14,
-    fontWeight: "700",
     marginTop: 10,
+    color: "#FFFFFF",
+    fontSize: 17,
+    fontWeight: "600",
   },
-
   partnerAddress: {
-    color: "#9D9D9D",
-    fontSize: 10,
+    marginTop: 5,
+    color: "#A3A3A3",
+    fontSize: 12,
   },
-
   partnerPrice: {
-    color: "#fff",
-    fontSize: 14,
-    fontWeight: "700",
-    marginTop: 10,
-  },
-
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.55)",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 24,
-  },
-
-  expiredModal: {
-    width: "100%",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 20,
-    padding: 26,
-    alignItems: "center",
-  },
-
-  expiredCircle: {
-    width: 92,
-    height: 92,
-    borderRadius: 46,
-    backgroundColor: "#ED0000",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 22,
-  },
-
-  expiredTitle: {
-    color: "#000000",
-    fontSize: 18,
-    fontWeight: "700",
-    textAlign: "center",
-    marginBottom: 12,
-  },
-
-  expiredText: {
-    color: "#000000",
-    fontSize: 14,
-    textAlign: "center",
-    lineHeight: 21,
-  },
-
-  okButton: {
-    backgroundColor: "#ED0000",
-    borderRadius: 24,
-    paddingHorizontal: 28,
-    paddingVertical: 12,
-    marginTop: 24,
-  },
-
-  okButtonText: {
+    marginTop: 8,
     color: "#FFFFFF",
     fontSize: 15,
     fontWeight: "700",
+  },
+  emptyText: {
+    color: "#9D9D9D",
+    marginLeft: 10,
   },
 });

@@ -10,7 +10,6 @@ import {
   View,
 } from "react-native";
 
-import api from "@/api";
 import AuthButton from "@/components/auth/AuthButton";
 import AuthFooter from "@/components/auth/AuthFooter";
 import AuthHeader from "@/components/auth/AuthHeader";
@@ -18,9 +17,11 @@ import AuthLayout from "@/components/auth/AuthLayout";
 import CustomInput from "@/components/auth/CustomInput";
 import PasswordInput from "@/components/auth/PasswordInput";
 import colors from "@/constants/colors";
-import { saveTokens } from "@/services/authService";
+import { useI18n } from "@/i18n/I18nProvider";
+import { getErrorMessage, login } from "@/services/authService";
 
 export default function LoginScreen() {
+  const { t } = useI18n();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [secureText, setSecureText] = useState(true);
@@ -30,23 +31,17 @@ export default function LoginScreen() {
   const handleLogin = async () => {
     setError("");
 
-    if (!email || !password) {
-      setError("Ju lutem plotësoni të gjitha fushat.");
+    if (!email.trim() || !password.trim()) {
+      setError(t("auth.fillAllFields"));
       return;
     }
 
     try {
       setLoading(true);
-      const response = await api.post("/auth/login", { email, password });
-
-      await saveTokens(response.data);
+      await login(email, password);
       router.replace("/(tabs)/map");
-    } catch (err: any) {
-      if (err.response?.data?.message) {
-        setError(err.response.data.message);
-      } else {
-        setError("Diçka shkoi keq. Provoni përsëri.");
-      }
+    } catch (err) {
+      setError(getErrorMessage(err, t("auth.loginFailed")));
     } finally {
       setLoading(false);
     }
@@ -57,22 +52,22 @@ export default function LoginScreen() {
       <View style={{ flex: 1 }}>
         <AuthLayout>
           <AuthHeader
-            title="Mirë se vini"
-            subtitle="Rezervoni vendin tuaj të parkimit"
+            title={t("auth.welcome")}
+            subtitle={t("auth.welcomeSubtitle")}
           />
 
           <View style={styles.formContainer}>
             <CustomInput
               value={email}
               onChangeText={setEmail}
-              placeholder="E-mail"
+              placeholder={t("auth.emailPlaceholder")}
               icon="email"
             />
 
             <PasswordInput
               value={password}
               onChangeText={setPassword}
-              placeholder="Fjalëkalimi"
+              placeholder={t("auth.password")}
               secureTextEntry={secureText}
               onToggleSecure={() => setSecureText(!secureText)}
             />
@@ -83,7 +78,7 @@ export default function LoginScreen() {
             <TouchableOpacity
               onPress={() => router.push("/(auth)/forgot-password")}
             >
-              <Text style={styles.forgotText}>Keni harruar fjalëkalimin?</Text>
+              <Text style={styles.forgotText}>{t("auth.forgotPassword")}</Text>
             </TouchableOpacity>
           </View>
 
@@ -91,15 +86,15 @@ export default function LoginScreen() {
 
           <View style={styles.buttonContainer}>
             {loading ? (
-              <ActivityIndicator size="large" color="#000" />
+              <ActivityIndicator size="large" color="#fff" />
             ) : (
-              <AuthButton title="Kyçu" onPress={handleLogin} />
+              <AuthButton title={t("auth.login")} onPress={handleLogin} />
             )}
           </View>
 
           <AuthFooter
-            text="Nuk keni një llogari? "
-            linkText="Regjistrohuni."
+            text={t("auth.noAccount")}
+            linkText={t("auth.registerLink")}
             onPress={() => router.replace("/(auth)/register")}
           />
         </AuthLayout>
