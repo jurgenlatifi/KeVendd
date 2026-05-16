@@ -33,12 +33,12 @@ public AuthResponse verifyOtp(String phone, String code) {
     String accessToken = jwtService.generateAccessToken(details);
     String refreshToken = refreshTokenService.createRefreshToken(user);
     
-    // ✅ FIXED - All 7 parameters (using 7 days = 604800000 ms)
+    // ✅ FIXED - 7 days in milliseconds
     return new AuthResponse(
         accessToken,
         refreshToken,
         "Bearer",
-        604800000L,  // 7 days in milliseconds (temporary - replace with jwtService method once we know the name)
+        604800000L,  // 7 days = 604800000 milliseconds
         user.getId().toString(),
         user.getEmail(),
         user.getRole().name()
