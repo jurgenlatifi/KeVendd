@@ -89,6 +89,16 @@ public class PhoneAuthService {
         UserDetailsImpl details = new UserDetailsImpl(user);
         String accessToken = jwtService.generateAccessToken(details);
         String refreshToken = refreshTokenService.createRefreshToken(user);
-        return new AuthResponse(accessToken, refreshToken, user.getRole().name(), user.getId());
+        
+        // ✅ FIXED - All 7 parameters required by AuthResponse constructor
+        return new AuthResponse(
+            accessToken,
+            refreshToken,
+            "Bearer",                          // tokenType
+            jwtService.getExpiration(),        // expiresIn
+            user.getId().toString(),           // userId
+            user.getEmail(),                   // email
+            user.getRole().name()              // role
+        );
     }
 }
